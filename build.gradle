@@ -1,0 +1,137 @@
+import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
+import net.fabricmc.loom.task.RemapJarTask
+
+plugins {
+    id 'fabric-loom' version "${loom_version}"
+    id 'maven-publish'
+
+    id "com.gradleup.shadow" version "8.3.8"
+    id 'java'
+}
+
+version = project.mod_version
+group = project.maven_group
+
+base {
+    archivesName = project.archives_base_name
+}
+
+repositories {
+    // Add repositories to retrieve artifacts from in here.
+    // You should only use this when depending on other mods because
+    // Loom adds the essential maven repositories to download Minecraft and libraries from automatically.
+    // See https://docs.gradle.org/current/userguide/declaring_repositories.html
+    // for more information about repositories.
+}
+
+dependencies {
+    // To change the versions see the gradle.properties file
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
+    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+
+    // Fabric API. This is technically optional, but you probably want it anyway.
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+
+    implementation "com.discord4j:discord4j-core:3.2.8"
+    implementation "io.github.classgraph:classgraph:4.8.180"
+}
+
+tasks.shadowJar {
+    from sourceSets.main.output
+
+    relocate("discord4j", "com.azyrod.vendor.discord4j")
+    relocate("com.discord4j", "com.azyrod.vendor.com.discord4j")
+    relocate("nonapi.io.github.classgraph", "com.azyrod.vendor.nonapi.io.github.classgraph")
+    relocate("io.github", "com.azyrod.vendor.io.github")
+
+    relocate("org.reactivestreams", "com.azyrod.vendor.org.reactivestreams")
+    relocate("reactor", "com.azyrod.vendor.reactor")
+    relocate("com.fasterxml", "com.azyrod.vendor.com.fasterxml")
+    relocate("io.projectreactor", "com.azyrod.vendor.io.projectreactor")
+    relocate("io.netty", "com.azyrod.vendor.io.netty")
+
+    relocate("com.github", "com.azyrod.vendor.com.github")
+
+    dependencies {
+        include dependency("com.discord4j:.*:.*")
+        include dependency("io.github.classgraph:classgraph:.*")
+
+        include dependency("org.reactivestreams:.*:.*")
+        include dependency("io.projectreactor.*:.*:.*")
+        include dependency("io.netty:.*:.*")
+        include dependency("com.fasterxml.jackson.*:.*:.*")
+
+        include dependency("com.github.ben-manes.caffeine:.*:.*")
+//			include dependency("com.discord4j:discord4j-common:3.2.8")
+//			include dependency("com.discord4j:discord4j-rest:3.2.8")
+//
+//			include dependency("com.discord4j:discord-json:1.6.25")
+//			include dependency("com.discord4j:discord-json-api:1.6.25")
+    }
+
+    exclude(
+            "assets/minecraft/**",
+            "data/minecraft/**",
+            "mappings/**",
+            "**/.mcassetsroot",
+            "*.jfc",
+            "pack.png",
+            "version.json"
+    )
+    mergeServiceFiles()
+}
+
+tasks.remapJar {
+    dependsOn tasks.named("shadowJar")
+    inputFile = tasks.named("shadowJar").get().archiveFile.get().asFile
+    addNestedDependencies = true
+}
+
+processResources {
+    inputs.property "version", project.version
+
+    filesMatching("fabric.mod.json") {
+        expand "version": inputs.properties.version
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    it.options.release = 21
+}
+
+java {
+    // Loom will automatically attach sourcesJar to a RemapSourcesJar task and to the "build" task
+    // if it is present.
+    // If you remove this line, sources will not be generated.
+    withSourcesJar()
+
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+}
+
+jar {
+    inputs.property "archivesName", project.base.archivesName
+
+    from("LICENSE") {
+        rename { "${it}_${inputs.properties.archivesName}" }
+    }
+}
+
+// configure the maven publication
+publishing {
+    publications {
+        create("mavenJava", MavenPublication) {
+            artifactId = project.archives_base_name
+            from components.java
+        }
+    }
+
+    // See https://docs.gradle.org/current/userguide/publishing_maven.html for information on how to set up publishing.
+    repositories {
+        // Add repositories to publish to here.
+        // Notice: This block does NOT have the same function as the block in the top level.
+        // The repositories here will be used for publishing your artifact, not for
+        // retrieving dependencies.
+    }
+}

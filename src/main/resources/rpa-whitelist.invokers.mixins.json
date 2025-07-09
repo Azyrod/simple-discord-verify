@@ -1,0 +1,14 @@
+{
+  "required": true,
+  "package": "com.azyrod.rpa_whitelist.mixins.invokers",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "ServerConfigListInvoker"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "overwrites": {
+    "requireAnnotations": true
+  }
+}
