@@ -20,7 +20,6 @@ import net.minecraft.text.ClickEvent;
 import net.minecraft.text.HoverEvent;
 import net.minecraft.text.MutableText;
 import net.minecraft.text.Text;
-import net.minecraft.util.Colors;
 import net.minecraft.util.Formatting;
 import org.jetbrains.annotations.NotNull;
 import org.reactivestreams.Publisher;
@@ -84,7 +83,7 @@ public class RPAWhitelist implements DedicatedServerModInitializer {
 		}
 
 		this.client.withGateway(gateway -> {
-			Publisher<?> chat_input_hook =  gateway.on(ChatInputInteractionEvent.class, event -> {
+			Publisher<?> chat_input_hook = gateway.on(ChatInputInteractionEvent.class, event -> {
 				Optional<Snowflake> guild_id = event.getInteraction().getGuildId();
 				if (guild_id.isEmpty() || guild_id.get().asLong() != config.values.discord_server_id()) {
 					return Mono.empty(); // Not our event, Ignore it

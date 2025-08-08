@@ -9,7 +9,7 @@
 	],
 	"contact": {
 		"homepage": "https://www.patreon.com/RPlayersAnonymous",
-		"sources": "TODO"
+		"sources": "https://github.com/Azyrod/simple-discord-verify"
 	},
 	"license": "CC0-1.0",
 	"icon": "assets/rpa-whitelist/icon.png",
