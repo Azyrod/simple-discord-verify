@@ -3,7 +3,9 @@
   "package": "com.azyrod.rpa_whitelist.mixins",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
-    "PlayerManagerMixin"
+    "EntityMixin",
+    "PlayerManagerMixin",
+    "ServerScoreboardMixin"
   ],
   "injectors": {
     "defaultRequire": 1

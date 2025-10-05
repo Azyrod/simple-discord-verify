@@ -1,0 +1,18 @@
+# RPA Verify Configuration
+
+# REQUIRED: The mod needs a discord bot, please create one on the Discord Developer Portal and insert the token here
+discord_bot_token: ""
+# REQUIRED: The ID of the Discord server the bot should operate on.
+discord_server_id:
+
+whitelist_config:
+  # REQUIRED: List of Discord Role IDs that grant whitelist access. A user only needs one of these roles to be whitelisted.
+  allowed_discord_roles:
+  #  - 12345
+  #  - 67890
+
+  # OPTIONAL: List of Discord Role IDs that remove whitelist access. Having any of these roles will remove user from
+  # the whitelist regardless of the allowed_discord_roles list.
+  disallowed_discord_roles:
+  #  - 12345
+  #  - 67890

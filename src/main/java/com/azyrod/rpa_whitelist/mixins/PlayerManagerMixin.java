@@ -2,7 +2,6 @@ package com.azyrod.rpa_whitelist.mixins;
 
 import com.azyrod.rpa_whitelist.RPAWhitelist;
 import com.azyrod.rpa_whitelist.mixins.invokers.ServerConfigListInvoker;
-import com.mojang.authlib.GameProfile;
 import discord4j.common.util.Snowflake;
 import net.minecraft.server.*;
 import net.minecraft.text.Text;
@@ -25,12 +24,10 @@ public abstract class PlayerManagerMixin {
     private Whitelist whitelist;
 
     @Shadow
-    public abstract boolean isWhitelisted(GameProfile profile);
-    @Shadow
     public abstract boolean isWhitelistEnabled();
 
-    @Inject(method = "checkCanJoin(Ljava/net/SocketAddress;Lcom/mojang/authlib/GameProfile;)Lnet/minecraft/text/Text;", at = @At(value = "HEAD"), cancellable = true)
-    public void checkCanJoin(SocketAddress socketAddress, GameProfile gameProfile, CallbackInfoReturnable<Text> cir) {
+    @Inject(method = "checkCanJoin(Ljava/net/SocketAddress;Lnet/minecraft/server/PlayerConfigEntry;)Lnet/minecraft/text/Text;", at = @At(value = "HEAD"), cancellable = true)
+    public void checkCanJoin(SocketAddress socketAddress, PlayerConfigEntry gameProfile, CallbackInfoReturnable<Text> cir) {
         RPAWhitelist rpa = RPAWhitelist.INSTANCE;
 
         if (rpa == null || rpa.config.isIncomplete()) {
@@ -41,7 +38,7 @@ public abstract class PlayerManagerMixin {
             return; // Without a whitelist anyone is allowed. OPs are always allowed
         }
 
-        Snowflake id = rpa.usercache.get(gameProfile.getId());
+        Snowflake id = rpa.usercache.get(gameProfile.id());
         if (id == null) {
             cir.setReturnValue(rpa.makeNotVerifiedMessage(gameProfile));
             return;

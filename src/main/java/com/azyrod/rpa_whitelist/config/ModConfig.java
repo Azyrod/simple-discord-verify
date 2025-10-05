@@ -1,24 +1,24 @@
 package com.azyrod.rpa_whitelist.config;
 
+import com.azyrod.rpa_whitelist.RPAWhitelist;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import net.fabricmc.loader.api.FabricLoader;
-import net.minecraft.text.Text;
 
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.IOException;
+import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
-import java.util.Arrays;
-import java.util.Properties;
+import java.nio.file.StandardCopyOption;
+import java.util.*;
 
 public class ModConfig {
     public static final Path CONFIG_FILE_PATH = FabricLoader.getInstance().getConfigDir()
-            .resolve("rpa_whitelist.config").normalize();
+            .resolve("rpa_whitelist.yaml").normalize();
 
-    public static final String[] REQUIRED_PROPERTIES = { "discord_bot_token", "discord_server_id", "discord_role_id" };
     boolean incomplete = true;
     public ConfigValues values;
 
@@ -31,33 +31,73 @@ public class ModConfig {
     }
 
     public void load(boolean initialLoad) throws IOException {
-        Properties properties = new Properties();
-
         try (FileInputStream f = new FileInputStream(CONFIG_FILE_PATH.toString())) {
-            properties.load(f);
+            ObjectMapper m = new ObjectMapper(new YAMLFactory());
+            m.enable(DeserializationFeature.ACCEPT_SINGLE_VALUE_AS_ARRAY);
+            m.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
+
+            try {
+                values = m.readValue(f, ConfigValues.class);
+
+                checkIfRequiredFieldsAreNotNull(values);
+            } catch (JsonMappingException e) {
+                RPAWhitelist.LOGGER.error("Failed to load config: ", e);
+                incomplete = true;
+            }
         } catch (NoSuchFileException | FileNotFoundException e) {
             if (!initialLoad) {
                 throw e;
             }
             createDefaultConfig();
             load();
-            return;
+        }
+    }
+
+    public void createDefaultConfig() throws IOException {
+        InputStream defaultConfigFile = RPAWhitelist.class.getResourceAsStream("/assets/config/default_config.yaml");
+
+        if (defaultConfigFile == null) {
+            throw new IllegalStateException("This distribution of RPAWhitelist is broken: cannot find the default configuration file inside of the mod's JAR.");
         }
 
-        ObjectMapper m = new ObjectMapper();
-        values = m.convertValue(properties, ConfigValues.class);
-        incomplete = Arrays.stream(REQUIRED_PROPERTIES).anyMatch((property) -> properties.getProperty(property).isBlank());
-    }
-
-    // TODO: Replace this with a default Config file in Jar Resources (like LambsDynamicLights does) so we can have comments in it
-    public void createDefaultConfig() throws IOException {
-        Properties properties = new Properties();
-        Arrays.stream(REQUIRED_PROPERTIES).forEach((property) -> properties.setProperty(property, ""));
-
         Files.createDirectories(CONFIG_FILE_PATH.getParent());
-        properties.store(new FileOutputStream(CONFIG_FILE_PATH.toString()), null);
+        Files.copy(defaultConfigFile, CONFIG_FILE_PATH, StandardCopyOption.REPLACE_EXISTING);
     }
 
-    public record ConfigValues(String discord_bot_token, long discord_server_id, long discord_role_id) {
+    private void checkIfRequiredFieldsAreNotNull(Object o) throws JsonMappingException {
+        try {
+            Arrays.stream(o.getClass().getDeclaredFields()).filter(field -> field.isAnnotationPresent(JsonProperty.class)).forEach(field -> {
+                field.setAccessible(true);
+                try {
+                    Object value = field.get(o);
+                    if (value == null) {
+                        throw new JsonMappingException(null, "Required field '%s' cannot be null".formatted(field.getName()));
+                    }
+
+                    if (!field.getType().isPrimitive()) {
+                        checkIfRequiredFieldsAreNotNull(value);
+                    }
+                } catch (IllegalAccessException | JsonMappingException e) {
+                    throw new RuntimeException(e);
+                }
+            });
+        } catch (RuntimeException e) {
+            if (e.getCause() instanceof JsonMappingException cause) {
+                throw cause;
+            }
+        }
+    }
+
+    public record ConfigValues(
+            @JsonProperty(required = true) String discord_bot_token,
+            @JsonProperty(required = true) Long discord_server_id,
+            @JsonProperty(required = true) WhitelistConfig whitelist_config
+    ) {
+    }
+
+    public record WhitelistConfig(
+            @JsonProperty(required = true) ArrayList<Long> allowed_discord_roles,
+            ArrayList<Long> disallowed_discord_roles
+    ) {
     }
 }

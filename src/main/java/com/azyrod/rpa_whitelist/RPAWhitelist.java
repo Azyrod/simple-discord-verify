@@ -3,7 +3,7 @@ package com.azyrod.rpa_whitelist;
 import com.azyrod.rpa_whitelist.Discord.CommandRegistrar;
 import com.azyrod.rpa_whitelist.config.DiscordUserCache;
 import com.azyrod.rpa_whitelist.config.ModConfig;
-import com.mojang.authlib.GameProfile;
+import com.mojang.brigadier.Command;
 import discord4j.common.util.Snowflake;
 import discord4j.core.DiscordClient;
 import discord4j.core.event.domain.interaction.ChatInputInteractionEvent;
@@ -13,14 +13,21 @@ import discord4j.core.retriever.EntityRetrievalStrategy;
 import discord4j.core.spec.InteractionFollowupCreateMono;
 import net.fabricmc.api.DedicatedServerModInitializer;
 
+import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
+import net.minecraft.command.argument.EntityArgumentType;
+import net.minecraft.entity.Entity;
+import net.minecraft.network.message.*;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.PlayerConfigEntry;
 import net.minecraft.server.ServerConfigHandler;
-import net.minecraft.text.ClickEvent;
-import net.minecraft.text.HoverEvent;
+import net.minecraft.server.command.CommandManager;
+import net.minecraft.server.command.ServerCommandSource;
+import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.MutableText;
 import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
+import net.minecraft.util.*;
 import org.jetbrains.annotations.NotNull;
 import org.reactivestreams.Publisher;
 import org.slf4j.Logger;
@@ -28,6 +35,9 @@ import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -43,13 +53,38 @@ public class RPAWhitelist implements DedicatedServerModInitializer {
 
 	public MinecraftServer minecraftServer;
 
-	public DiscordClient client;
+    public final long THREE_MONTHS_MS = 3L * 30 * 24 * 60 * 60 * 1000;
+    public final Snowflake SMP_ACTIVE_ROLE = Snowflake.of(1423011656367083654L);
+    public final Snowflake SMP_INACTIVE_ROLE = Snowflake.of(1423012296896155648L);
+
+    public DiscordClient client;
 	public Guild guild;
 
 	@Override
 	public void onInitializeServer() {
 		INSTANCE = this;
-		ServerLifecycleEvents.SERVER_STARTING.register(server -> this.minecraftServer = server);
+		ServerLifecycleEvents.SERVER_STARTING.register(server -> {
+            this.minecraftServer = server;
+            checkPlayersLastPlayedAt();
+        });
+        ServerTickEvents.END_SERVER_TICK.register(this::onServerTick);
+
+        CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
+            dispatcher.register(
+                    CommandManager.literal("join_chaos")
+                            .requires(source -> source.isExecutedByPlayer() && (Objects.equals(source.getPlayer().getNameForScoreboard(), "Mjjollnir") || source.hasPermissionLevel(4)))
+                            .then(CommandManager.argument("player", EntityArgumentType.player())
+                                .executes(context -> {
+                                   ServerPlayerEntity player = context.getSource().getPlayerOrThrow();
+                                    Entity target = EntityArgumentType.getEntity(context, "player");
+                                    ServerCommandSource new_source = this.minecraftServer.getCommandSource().withEntity(target);
+
+                                    this.minecraftServer.getCommandManager().executeWithPrefix(new_source, "function rpanon:teams/join_chaos");
+                                    return Command.SINGLE_SUCCESS;
+                                })
+                            )
+            );
+        });
 
         try {
 			usercache.load();
@@ -67,7 +102,53 @@ public class RPAWhitelist implements DedicatedServerModInitializer {
 		onRefresh();
 	}
 
-	public void onRefresh() {
+    private void onServerTick(MinecraftServer server) {
+        if (server.getTicks() % (20 * 60 * 30) == 0) {
+            checkPlayersLastPlayedAt();
+        }
+    }
+
+    private void checkPlayersLastPlayedAt() {
+        try (var stream = Files.list(this.minecraftServer.getSavePath(WorldSavePath.PLAYERDATA))) {
+            long epoch = Util.getEpochTimeMs();
+
+            stream.forEach(path -> {
+                Path filename = path.getFileName();
+                String str = filename.toString();
+
+                if (Files.isRegularFile(path) && str.endsWith(".dat") && !str.endsWith("-.dat")) {
+                    try {
+                        FileTime time = Files.getLastModifiedTime(path);
+                        String uuid_str = str.split("\\.")[0];
+                        UUID uuid = UUID.fromString(uuid_str);
+                        Snowflake player_id = this.usercache.get(uuid);
+                        Snowflake remove_role;
+                        Snowflake add_role;
+
+                        if (player_id == null) return;
+
+                        if (time.toMillis() + THREE_MONTHS_MS <= epoch) {
+                            remove_role = SMP_ACTIVE_ROLE;
+                            add_role = SMP_INACTIVE_ROLE;
+                        } else {
+                            remove_role = SMP_INACTIVE_ROLE;
+                            add_role = SMP_ACTIVE_ROLE;
+                        }
+
+                        this.guild.getMemberById(player_id).map((Member member) -> {
+                            return Mono.when(member.removeRole(remove_role), member.addRole(add_role)).subscribe();
+                        }).subscribe();
+                    } catch (IOException e) {
+                        LOGGER.error("Failed to read modified time of '{}': ", path, e);
+                    }
+                }
+            });
+        } catch (IOException ex) {
+            LOGGER.error("Failed to access PlayerData files: ", ex);
+        }
+    }
+
+    public void onRefresh() {
 		if (this.config.isIncomplete()) {
 			this.client = null;
 			this.guild = null;
@@ -99,17 +180,21 @@ public class RPAWhitelist implements DedicatedServerModInitializer {
 		}).subscribe();
 	}
 
-	public boolean userHasDiscordRole(Snowflake id) {
-		return Boolean.TRUE.equals(guild.getMemberById(id).map((member) ->
-				member.getRoles(EntityRetrievalStrategy.REST).any(role ->
-            		role.getId().asLong() == config.values.discord_role_id()
-				).block()
-			).block()
-		);
-	}
+    public boolean userHasDiscordRole(Snowflake id) {
+        return Boolean.TRUE.equals(guild.getMemberById(id).map(this::userHasDiscordRole).block());
+    }
 
-	public Text makeNotVerifiedMessage(@NotNull GameProfile profile) {
-		UUID uuid = profile.getId();
+    public boolean userHasDiscordRole(Member member) {
+        return Boolean.TRUE.equals(member.getRoles(EntityRetrievalStrategy.REST).any(role -> {
+            long role_id = role.getId().asLong();
+            var whitelist_config = config.values.whitelist_config();
+
+            return whitelist_config.allowed_discord_roles().stream().anyMatch(id -> id == role_id) && !whitelist_config.disallowed_discord_roles().stream().anyMatch(id -> id == role_id);
+        }).block());
+    }
+
+    public Text makeNotVerifiedMessage(@NotNull PlayerConfigEntry profile) {
+		UUID uuid = profile.id();
 		Integer code = loginCodeMap.get(uuid);
 
 		if (code == null) {
@@ -133,14 +218,14 @@ public class RPAWhitelist implements DedicatedServerModInitializer {
                         Please use the following Discord command for the bot to verify your account.
                     """
 		).styled(style -> style.withFormatting(Formatting.RESET));
-		String command = "/rpa_verify %s %s".formatted(profile.getName(), code);
-		Text link = Text.literal(command).styled((style) -> style
-				.withClickEvent(new ClickEvent(ClickEvent.Action.COPY_TO_CLIPBOARD, command))
-				.withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Text.literal("Click to copy")))
-				.withFormatting(Formatting.BLUE)
-		);
+		String command = "/rpa_verify %s %s".formatted(profile.name(), code);
+		Text link = Text.literal(command).styled((style) -> style.withFormatting(Formatting.BLUE));
 
-		return text.append(title).append(separator).append(body).append(separator).append(link);
+        MutableText channel = Text.literal("Please use this command in ")
+                .append((Text)Text.literal("#squire-bot-commands").styled(style -> style.withColor(Colors.CYAN)))
+                .append(" channel");
+
+		return text.append(title).append(separator).append(body).append(separator).append(link).append(separator).append(channel);
 	}
 
 	public Text makeMissingRoleMessage() {
@@ -197,13 +282,10 @@ public class RPAWhitelist implements DedicatedServerModInitializer {
 			return event.createFollowup("Somehow failed to check your Discord roles... Please report this error.\n\nYou can try to login on the Minecraft Server and see if it works");
 		}
 
-		return member.getRoles().any(role -> role.getId().asLong() == config.values.discord_role_id())
-				.map(valid -> {
-					if (valid) {
-						return event.createFollowup("Access to the Minecraft Server granted !");
-					} else {
-						return event.createFollowup("You do not have the required role to join the Minecraft Server.\nPlease refer to the How To Apply channel for more information.");
-					}
-				}).block();
+        if (userHasDiscordRole(member)) {
+            return event.createFollowup("Access to the Minecraft Server granted !");
+        } else {
+            return event.createFollowup("You do not have the required role to join the Minecraft Server.\nPlease refer to the How To Apply channel for more information.");
+        }
 	}
 }

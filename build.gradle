@@ -35,6 +35,7 @@ dependencies {
 
     implementation "com.discord4j:discord4j-core:3.2.8"
     implementation "io.github.classgraph:classgraph:4.8.180"
+    implementation "com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.19.2"
 }
 
 tasks.shadowJar {
@@ -63,11 +64,6 @@ tasks.shadowJar {
         include dependency("com.fasterxml.jackson.*:.*:.*")
 
         include dependency("com.github.ben-manes.caffeine:.*:.*")
-//			include dependency("com.discord4j:discord4j-common:3.2.8")
-//			include dependency("com.discord4j:discord4j-rest:3.2.8")
-//
-//			include dependency("com.discord4j:discord-json:1.6.25")
-//			include dependency("com.discord4j:discord-json-api:1.6.25")
     }
 
     exclude(
