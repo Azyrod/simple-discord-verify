@@ -3,7 +3,6 @@ package com.azyrod.rpa_whitelist;
 import com.azyrod.rpa_whitelist.Discord.CommandRegistrar;
 import com.azyrod.rpa_whitelist.config.DiscordUserCache;
 import com.azyrod.rpa_whitelist.config.ModConfig;
-import com.mojang.brigadier.Command;
 import discord4j.common.util.Snowflake;
 import discord4j.core.DiscordClient;
 import discord4j.core.event.domain.interaction.ChatInputInteractionEvent;
@@ -12,22 +11,17 @@ import discord4j.core.object.entity.Member;
 import discord4j.core.retriever.EntityRetrievalStrategy;
 import discord4j.core.spec.InteractionFollowupCreateMono;
 import net.fabricmc.api.DedicatedServerModInitializer;
-
-import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
-import net.minecraft.command.argument.EntityArgumentType;
-import net.minecraft.entity.Entity;
-import net.minecraft.network.message.*;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.PlayerConfigEntry;
 import net.minecraft.server.ServerConfigHandler;
-import net.minecraft.server.command.CommandManager;
-import net.minecraft.server.command.ServerCommandSource;
-import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.MutableText;
 import net.minecraft.text.Text;
-import net.minecraft.util.*;
+import net.minecraft.util.Colors;
+import net.minecraft.util.Formatting;
+import net.minecraft.util.Util;
+import net.minecraft.util.WorldSavePath;
 import org.jetbrains.annotations.NotNull;
 import org.reactivestreams.Publisher;
 import org.slf4j.Logger;
@@ -68,23 +62,6 @@ public class RPAWhitelist implements DedicatedServerModInitializer {
             checkPlayersLastPlayedAt();
         });
         ServerTickEvents.END_SERVER_TICK.register(this::onServerTick);
-
-        CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
-            dispatcher.register(
-                    CommandManager.literal("join_chaos")
-                            .requires(source -> source.isExecutedByPlayer() && (Objects.equals(source.getPlayer().getNameForScoreboard(), "Mjjollnir") || source.hasPermissionLevel(4)))
-                            .then(CommandManager.argument("player", EntityArgumentType.player())
-                                .executes(context -> {
-                                   ServerPlayerEntity player = context.getSource().getPlayerOrThrow();
-                                    Entity target = EntityArgumentType.getEntity(context, "player");
-                                    ServerCommandSource new_source = this.minecraftServer.getCommandSource().withEntity(target);
-
-                                    this.minecraftServer.getCommandManager().executeWithPrefix(new_source, "function rpanon:teams/join_chaos");
-                                    return Command.SINGLE_SUCCESS;
-                                })
-                            )
-            );
-        });
 
         try {
 			usercache.load();
