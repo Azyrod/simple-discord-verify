@@ -9,6 +9,7 @@ import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import net.fabricmc.loader.api.FabricLoader;
 
 import java.io.*;
+import java.lang.reflect.InvocationTargetException;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
@@ -21,16 +22,13 @@ public class ModConfig {
 
     boolean incomplete = true;
     public ConfigValues values;
-
-    public void load() throws IOException {
-        load(false);
-    }
+    boolean initialLoad = true;
 
     public boolean isIncomplete() {
         return incomplete;
     }
 
-    public void load(boolean initialLoad) throws IOException {
+    public void load() throws IOException {
         try (FileInputStream f = new FileInputStream(CONFIG_FILE_PATH.toString())) {
             ObjectMapper m = new ObjectMapper(new YAMLFactory());
             m.enable(DeserializationFeature.ACCEPT_SINGLE_VALUE_AS_ARRAY);
@@ -40,6 +38,7 @@ public class ModConfig {
                 values = m.readValue(f, ConfigValues.class);
 
                 checkIfRequiredFieldsAreNotNull(values);
+                incomplete = false;
             } catch (JsonMappingException e) {
                 RPAWhitelist.LOGGER.error("Failed to load config: ", e);
                 incomplete = true;
@@ -48,6 +47,7 @@ public class ModConfig {
             if (!initialLoad) {
                 throw e;
             }
+            initialLoad = false;
             createDefaultConfig();
             load();
         }
@@ -66,12 +66,26 @@ public class ModConfig {
 
     private void checkIfRequiredFieldsAreNotNull(Object o) throws JsonMappingException {
         try {
-            Arrays.stream(o.getClass().getDeclaredFields()).filter(field -> field.isAnnotationPresent(JsonProperty.class)).forEach(field -> {
+            Arrays.stream(o.getClass().getDeclaredFields()).filter(field -> {
+                JsonProperty annotation = field.getAnnotation(JsonProperty.class);
+
+                return annotation != null && annotation.required();
+            }).forEach(field -> {
                 field.setAccessible(true);
                 try {
                     Object value = field.get(o);
                     if (value == null) {
                         throw new JsonMappingException(null, "Required field '%s' cannot be null".formatted(field.getName()));
+                    }
+
+                    try {
+                        if ((Boolean) value.getClass().getMethod("isEmpty").invoke(value)) {
+                            throw new JsonMappingException(null, "Required field '%s' cannot be empty".formatted(field.getName()));
+                        }
+                    } catch (NoSuchMethodException e) {
+                        // No isEmpty method -> pass
+                    } catch (InvocationTargetException e) {
+                        throw new RuntimeException(e);
                     }
 
                     if (!field.getType().isPrimitive()) {
@@ -99,5 +113,10 @@ public class ModConfig {
             @JsonProperty(required = true) ArrayList<Long> allowed_discord_roles,
             ArrayList<Long> disallowed_discord_roles
     ) {
+        public WhitelistConfig {
+            if (disallowed_discord_roles == null) {
+                disallowed_discord_roles = new ArrayList<>();
+            }
+        }
     }
 }

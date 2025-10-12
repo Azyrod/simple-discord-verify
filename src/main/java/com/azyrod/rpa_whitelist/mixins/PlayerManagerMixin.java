@@ -22,15 +22,18 @@ public abstract class PlayerManagerMixin {
     @Final
     @Shadow
     private Whitelist whitelist;
+    @Final
+    @Shadow
+    private MinecraftServer server;
 
     @Shadow
     public abstract boolean isWhitelistEnabled();
 
-    @Inject(method = "checkCanJoin(Ljava/net/SocketAddress;Lnet/minecraft/server/PlayerConfigEntry;)Lnet/minecraft/text/Text;", at = @At(value = "HEAD"), cancellable = true)
+    @Inject(method = "checkCanJoin(Ljava/net/SocketAddress;Lnet/minecraft/server/PlayerConfigEntry;)Lnet/minecraft/text/Text;", at = @At("HEAD"), cancellable = true)
     public void checkCanJoin(SocketAddress socketAddress, PlayerConfigEntry gameProfile, CallbackInfoReturnable<Text> cir) {
         RPAWhitelist rpa = RPAWhitelist.INSTANCE;
 
-        if (rpa == null || rpa.config.isIncomplete()) {
+        if (rpa == null || rpa.config.isIncomplete() || rpa.isDisabled()) {
             return; // Missing required config values. Mod is essentially Disabled. Let MC use the default whitelist logic
         }
 
