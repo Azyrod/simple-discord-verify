@@ -103,7 +103,7 @@ public class RPAWhitelist implements DedicatedServerModInitializer {
     }
 
     private void checkPlayersLastPlayedAt() {
-        if (isDisabled() || config.isIncomplete())
+        if (isDisabled() || config.isIncomplete() || !"SMP".equals(config.values.server_config().server_name()))
             return;
         try (var stream = Files.list(this.minecraftServer.getSavePath(WorldSavePath.PLAYERDATA))) {
             long epoch = Util.getEpochTimeMs();
@@ -177,8 +177,10 @@ public class RPAWhitelist implements DedicatedServerModInitializer {
             Publisher<?> chat_input_hook = gateway.on(ChatInputInteractionEvent.class, event -> {
                 Optional<Snowflake> guild_id = event.getInteraction().getGuildId();
                 String server_name = event.getOptionAsString("mc_server").orElse(null);
+                boolean invalid_server_name = !Objects.equals(server_name, config.values.server_config().server_name());
 
-                if (guild_id.isEmpty() || guild_id.get().asLong() != config.values.discord_server_id() || !Objects.equals(server_name, config.values.server_config().server_name())) {
+                // TODO: Make server_name config optional if there is only 1 server name ?
+                if (guild_id.isEmpty() || guild_id.get().asLong() != config.values.discord_server_id() || invalid_server_name) {
                     return Mono.empty(); // Not our event, Ignore it
                 }
 

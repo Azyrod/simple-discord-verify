@@ -31,21 +31,19 @@ public record CommandRegistrar(RestClient restClient) {
         List<ApplicationCommandRequest> commands = new ArrayList<>();
         for (String json : getCommandsJson()) {
             ApplicationCommandRequest request = d4jMapper.getObjectMapper().readValue(json, ApplicationCommandRequest.class);
+            List<ApplicationCommandOptionData> options = request.options().get();
+            ApplicationCommandOptionData mc_server_option = options.stream().filter(option -> option.name().equals("mc_server")).findFirst().orElseThrow();
 
-            if (Objects.equals(request.name(), "rpa_verify")) {
-                List<ApplicationCommandOptionData> options = request.options().get();
-                ApplicationCommandOptionData mc_server_option = options.stream().filter(option -> option.name().equals("mc_server")).findFirst().orElseThrow();
+            options.remove(mc_server_option);
+            List<ApplicationCommandOptionChoiceData> choices = config.values.server_config().server_names().stream().map(name -> {
+                return (ApplicationCommandOptionChoiceData) ApplicationCommandOptionChoiceData.builder().name(name).value(name).build();
+            }).toList();
 
-                options.remove(mc_server_option);
-                List<ApplicationCommandOptionChoiceData> choices = config.values.server_config().server_names().stream().map(name -> {
-                    return (ApplicationCommandOptionChoiceData)ApplicationCommandOptionChoiceData.builder().name(name).value(name).build();
-                }).toList();
+            // Dynamically append choices
+            mc_server_option = ImmutableApplicationCommandOptionData.builder().from(mc_server_option).choices(choices).build();
+            options.addFirst(mc_server_option);
+            request = ImmutableApplicationCommandRequest.builder().from(request).options(options).build();
 
-                // Dynamically append choices
-                mc_server_option = ImmutableApplicationCommandOptionData.builder().from(mc_server_option).choices(choices).build();
-                options.addFirst(mc_server_option);
-                request = ImmutableApplicationCommandRequest.builder().from(request).options(options).build();
-            }
             commands.add(request);
         }
 

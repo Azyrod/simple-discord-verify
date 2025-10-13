@@ -1,5 +1,13 @@
 {
   "name": "rpa_unlink",
-  "description": "Un-Links your Discord account from MC",
-  "options": []
+  "description": "Un-Links your Discord account from your Minecraft one",
+  "options": [
+    {
+      "name": "mc_server",
+      "description": "The Minecraft server you want to unlink from",
+      "type": 3,
+      "required": true,
+      "choices": []
+    }
+  ]
 }
