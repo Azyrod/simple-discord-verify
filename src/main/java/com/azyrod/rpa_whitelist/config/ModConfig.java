@@ -38,6 +38,10 @@ public class ModConfig {
                 values = m.readValue(f, ConfigValues.class);
 
                 checkIfRequiredFieldsAreNotNull(values);
+                ServerConfig serverConfig = values.server_config;
+                if (!serverConfig.server_names.contains(serverConfig.server_name)) {
+                    throw new JsonMappingException(null, "The given server name '%s' is not in the server_names options".formatted(serverConfig.server_name));
+                }
                 incomplete = false;
             } catch (JsonMappingException e) {
                 RPAWhitelist.LOGGER.error("Failed to load config: ", e);
@@ -105,9 +109,14 @@ public class ModConfig {
     public record ConfigValues(
             @JsonProperty(required = true) String discord_bot_token,
             @JsonProperty(required = true) Long discord_server_id,
-            @JsonProperty(required = true) WhitelistConfig whitelist_config
-    ) {
-    }
+            @JsonProperty(required = true) WhitelistConfig whitelist_config,
+            @JsonProperty(required = true) ServerConfig server_config
+    ) {}
+
+    public record ServerConfig(
+            @JsonProperty(required = true) ArrayList<String> server_names,
+            @JsonProperty(required = true) String server_name
+    ) {}
 
     public record WhitelistConfig(
             @JsonProperty(required = true) ArrayList<Long> allowed_discord_roles,

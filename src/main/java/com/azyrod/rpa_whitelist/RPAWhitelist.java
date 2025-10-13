@@ -5,6 +5,7 @@ import com.azyrod.rpa_whitelist.config.DiscordUserCache;
 import com.azyrod.rpa_whitelist.config.ModConfig;
 import discord4j.common.util.Snowflake;
 import discord4j.core.DiscordClient;
+import discord4j.core.GatewayDiscordClient;
 import discord4j.core.event.domain.interaction.ChatInputInteractionEvent;
 import discord4j.core.object.entity.Guild;
 import discord4j.core.object.entity.Member;
@@ -54,7 +55,9 @@ public class RPAWhitelist implements DedicatedServerModInitializer {
     public final Snowflake SMP_ACTIVE_ROLE = Snowflake.of(1423011656367083654L);
     public final Snowflake SMP_INACTIVE_ROLE = Snowflake.of(1423012296896155648L);
 
+    private final Object lock = new Object();
     public DiscordClient client;
+    public GatewayDiscordClient gateway;
     public Guild guild;
 
     public static GameRules.Key<GameRules.BooleanRule> DISCORD_VERIFY_ENABLED;
@@ -76,7 +79,7 @@ public class RPAWhitelist implements DedicatedServerModInitializer {
         return !minecraftServer.getGameRules().get(DISCORD_VERIFY_ENABLED).get();
     }
 
-    public void refresh() {
+    public synchronized void refresh() {
         try {
             usercache.load();
             config.load();
@@ -141,25 +144,41 @@ public class RPAWhitelist implements DedicatedServerModInitializer {
         }
     }
 
-    public void onRefresh() {
-        if (this.config.isIncomplete()) {
+    private void onRefresh() {
+        synchronized (lock) {
+            if (this.gateway != null) {
+                this.gateway.logout().block();
+            }
             this.client = null;
+            this.gateway = null;
             this.guild = null;
+        }
+
+        if (this.config.isIncomplete()) {
             return;
         }
 
         this.client = DiscordClient.create(this.config.values.discord_bot_token());
 
         try {
-            new CommandRegistrar(this.client).registerCommands(this.config.values.discord_server_id());
+            new CommandRegistrar(this.client).registerCommands(this.config);
         } catch (Exception e) {
             LOGGER.error("Failed to register Discord Commands", e);
         }
 
         this.client.withGateway(gateway -> {
+            synchronized (lock) {
+                if (this.gateway != null) {
+                    this.gateway.logout().block();
+                }
+                this.gateway = gateway;
+            }
+
             Publisher<?> chat_input_hook = gateway.on(ChatInputInteractionEvent.class, event -> {
                 Optional<Snowflake> guild_id = event.getInteraction().getGuildId();
-                if (guild_id.isEmpty() || guild_id.get().asLong() != config.values.discord_server_id()) {
+                String server_name = event.getOptionAsString("mc_server").orElse(null);
+
+                if (guild_id.isEmpty() || guild_id.get().asLong() != config.values.discord_server_id() || !Objects.equals(server_name, config.values.server_config().server_name())) {
                     return Mono.empty(); // Not our event, Ignore it
                 }
 
@@ -212,7 +231,7 @@ public class RPAWhitelist implements DedicatedServerModInitializer {
                     Please use the following Discord command for the bot to verify your account.
                 """
         ).styled(style -> style.withFormatting(Formatting.RESET));
-        String command = "/rpa_verify %s %s".formatted(profile.name(), code);
+        String command = "/rpa_verify %s %s %s".formatted(config.values.server_config().server_name(), profile.name(), code);
         Text link = Text.literal(command).styled((style) -> style.withFormatting(Formatting.BLUE));
 
         MutableText channel = Text.literal("Please use this command in ")
@@ -255,24 +274,34 @@ public class RPAWhitelist implements DedicatedServerModInitializer {
             return event.createFollowup("Minecraft Server is restarting - please wait a couple minutes");
         }
 
-        String username = event.getOptionAsString("username").orElse(null);
+        String username = event.getOptionAsString("mc_username").orElse(null);
         Long code = event.getOptionAsLong("code").orElse(null);
 
         AtomicReference<UUID> uuid = new AtomicReference<>();
         this.minecraftServer.submitAndJoin(() -> {
             uuid.set(ServerConfigHandler.getPlayerUuidByName(this.minecraftServer, username));
         });
+        if (usercache.get(uuid.get()) != null) {
+            return verifyCommandResponse(event);
+        }
+
         Integer expected_code = loginCodeMap.get(uuid.get());
 
         if (expected_code == null || code == null) {
             return event.createFollowup("Please login on the Minecraft Server once to generate a login code.");
         }
+        // TODO: After a couple failed attempts, re-generate the code so users can't brute-force
         if (expected_code.longValue() != code) {
             return event.createFollowup("Invalid login code. Please login on the Minecraft Server to receive your personal code.");
         }
         usercache.put(uuid.get(), event.getUser().getId());
 
+        return verifyCommandResponse(event);
+    }
+
+    private InteractionFollowupCreateMono verifyCommandResponse(@NotNull ChatInputInteractionEvent event) {
         Member member = event.getInteraction().getMember().orElse(null);
+
         if (member == null) {
             return event.createFollowup("Somehow failed to check your Discord roles... Please report this error.\n\nYou can try to login on the Minecraft Server and see if it works");
         }

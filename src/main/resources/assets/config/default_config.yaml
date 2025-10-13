@@ -5,6 +5,16 @@ discord_bot_token: ""
 # REQUIRED: The ID of the Discord server the bot should operate on.
 discord_server_id:
 
+server_config:
+  # REQUIRED: The names of the different servers that you offer to your Discord members.
+  # <!> This list needs to be the SAME on all the Minecraft Servers running with the same discord_bot_token! <!>
+  server_names:
+    # - "SMP"
+    # - "Event Server"
+
+  # REQUIRED: The name of the server this config file is for.
+  server_name: ""
+
 whitelist_config:
   # REQUIRED: List of Discord Role IDs that grant whitelist access. A user only needs one of these roles to be whitelisted.
   allowed_discord_roles:

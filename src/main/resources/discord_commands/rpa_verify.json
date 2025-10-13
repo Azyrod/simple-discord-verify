@@ -3,8 +3,15 @@
   "description": "Links your Discord account to MC so you can login to the server",
   "options": [
     {
-      "name": "username",
-      "description": "MC Username",
+      "name": "mc_server",
+      "description": "The Minecraft server you want to play on",
+      "type": 3,
+      "required": true,
+      "choices": []
+    },
+    {
+      "name": "mc_username",
+      "description": "Your Minecraft username",
       "type": 3,
       "required": true
     },

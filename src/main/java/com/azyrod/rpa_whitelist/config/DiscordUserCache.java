@@ -75,6 +75,7 @@ public class DiscordUserCache {
         Map<UUID, Snowflake> map = mapper.readValue(file, typeRef);
         cache.clear();
         cache.putAll(map);
+        trySave();
     }
 
     private void trySave() {
