@@ -4,9 +4,8 @@ import com.azyrod.rpa_whitelist.RPAWhitelist;
 import com.google.common.collect.ImmutableBiMap;
 import discord4j.common.util.Snowflake;
 import discord4j.core.object.entity.Member;
-import net.minecraft.scoreboard.Scoreboard;
-import net.minecraft.scoreboard.ServerScoreboard;
-import net.minecraft.scoreboard.Team;
+import discord4j.core.object.entity.channel.MessageChannel;
+import net.minecraft.scoreboard.*;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import org.reactivestreams.Publisher;
@@ -16,8 +15,11 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import reactor.core.publisher.Mono;
+
+import java.util.Objects;
 
 @Mixin(ServerScoreboard.class)
 public abstract class ServerScoreboardMixin extends Scoreboard {
@@ -61,5 +63,21 @@ public abstract class ServerScoreboardMixin extends Scoreboard {
 
             return Mono.when(remove_old_role, add_new_role);
         }).subscribe();
+    }
+
+    @Inject(
+            method = {"updateScore(Lnet/minecraft/scoreboard/ScoreHolder;Lnet/minecraft/scoreboard/ScoreboardObjective;Lnet/minecraft/scoreboard/ScoreboardScore;)V"},
+            at = {@At("TAIL")}
+    )
+    public void onUpdateScore(ScoreHolder scoreHolder, ScoreboardObjective objective, ScoreboardScore score, CallbackInfo ci) {
+        RPAWhitelist rpa = RPAWhitelist.INSTANCE;
+
+        if (Objects.equals(scoreHolder.getNameForScoreboard(), "$lvl") && Objects.equals(objective.getName(), "warp_level")) {
+            long channel_id = 1409502210160726058L;
+
+            rpa.guild.getChannelById(Snowflake.of(channel_id)).ofType(MessageChannel.class).flatMap(
+                    channel -> channel.createMessage(String.format("Warp Level is now %d", score.getScore()))
+            ).subscribe();
+        }
     }
 }

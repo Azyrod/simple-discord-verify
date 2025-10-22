@@ -21,6 +21,13 @@ public abstract class EntityMixin {
     @Unique
     private static final Map<String, Snowflake> tag_role_map = new ImmutableMap.Builder<String, Snowflake>()
             .put("test", Snowflake.of(1086077236211359915L))
+            .put("tag_cadian", Snowflake.of(1402867894823551018L))
+            .put("tag_adep_mech", Snowflake.of(1402867720210354416L))
+            .put("tag_voidguard", Snowflake.of(1402867362209726574L))
+            .put("tag_voidsmen", Snowflake.of(1402867579936182272L))
+            .put("tag_ghost", Snowflake.of(1402868021592199231L))
+            .put("tag_heretic", Snowflake.of(1402868129641795694L))
+            .put("tag_daemons", Snowflake.of(1402868129641795694L))
             .build();
 
     @Unique

@@ -3,6 +3,8 @@ package com.azyrod.rpa_whitelist;
 import com.azyrod.rpa_whitelist.Discord.CommandRegistrar;
 import com.azyrod.rpa_whitelist.config.DiscordUserCache;
 import com.azyrod.rpa_whitelist.config.ModConfig;
+import com.mojang.authlib.GameProfile;
+import com.mojang.brigadier.Command;
 import discord4j.common.util.Snowflake;
 import discord4j.core.DiscordClient;
 import discord4j.core.GatewayDiscordClient;
@@ -12,13 +14,18 @@ import discord4j.core.object.entity.Member;
 import discord4j.core.retriever.EntityRetrievalStrategy;
 import discord4j.core.spec.InteractionFollowupCreateMono;
 import net.fabricmc.api.DedicatedServerModInitializer;
+import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.gamerule.v1.GameRuleFactory;
 import net.fabricmc.fabric.api.gamerule.v1.GameRuleRegistry;
+import net.minecraft.command.argument.EntityArgumentType;
+import net.minecraft.entity.Entity;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.PlayerConfigEntry;
 import net.minecraft.server.ServerConfigHandler;
+import net.minecraft.server.command.CommandManager;
+import net.minecraft.server.command.ServerCommandSource;
+import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.MutableText;
 import net.minecraft.text.Text;
 import net.minecraft.util.Colors;
@@ -55,12 +62,14 @@ public class RPAWhitelist implements DedicatedServerModInitializer {
     public final Snowflake SMP_ACTIVE_ROLE = Snowflake.of(1423011656367083654L);
     public final Snowflake SMP_INACTIVE_ROLE = Snowflake.of(1423012296896155648L);
 
+
     private final Object lock = new Object();
     public DiscordClient client;
     public GatewayDiscordClient gateway;
     public Guild guild;
 
     public static GameRules.Key<GameRules.BooleanRule> DISCORD_VERIFY_ENABLED;
+    public static GameRules.Key<GameRules.BooleanRule> PVP;
 
     @Override
     public void onInitializeServer() {
@@ -71,6 +80,24 @@ public class RPAWhitelist implements DedicatedServerModInitializer {
         ServerTickEvents.END_SERVER_TICK.register(this::onServerTick);
 
         DISCORD_VERIFY_ENABLED = GameRuleRegistry.register("discordVerifyEnabled", GameRules.Category.PLAYER, GameRuleFactory.createBooleanRule(true));
+
+        PVP = GameRuleRegistry.register("pvp", GameRules.Category.PLAYER, GameRuleFactory.createBooleanRule(true));
+        CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
+            dispatcher.register(
+                    CommandManager.literal("join_chaos")
+                            .requires(source -> source.isExecutedByPlayer() && (Objects.equals(source.getPlayer().getNameForScoreboard(), "Mjjollnir") || source.hasPermissionLevel(4)))
+                            .then(CommandManager.argument("player", EntityArgumentType.player())
+                                    .executes(context -> {
+                                        ServerPlayerEntity player = context.getSource().getPlayerOrThrow();
+                                        Entity target = EntityArgumentType.getEntity(context, "player");
+                                        ServerCommandSource new_source = this.minecraftServer.getCommandSource().withEntity(target);
+
+                                        this.minecraftServer.getCommandManager().executeWithPrefix(new_source, "function rpanon:teams/join_chaos");
+                                        return Command.SINGLE_SUCCESS;
+                                    })
+                            )
+            );
+        });
 
         refresh();
     }
@@ -208,8 +235,8 @@ public class RPAWhitelist implements DedicatedServerModInitializer {
         }).block());
     }
 
-    public Text makeNotVerifiedMessage(@NotNull PlayerConfigEntry profile) {
-        UUID uuid = profile.id();
+    public Text makeNotVerifiedMessage(@NotNull GameProfile profile) {
+        UUID uuid = profile.getId();
         Integer code = loginCodeMap.get(uuid);
 
         if (code == null) {
@@ -233,7 +260,7 @@ public class RPAWhitelist implements DedicatedServerModInitializer {
                     Please use the following Discord command for the bot to verify your account.
                 """
         ).styled(style -> style.withFormatting(Formatting.RESET));
-        String command = "/rpa_verify %s %s %s".formatted(config.values.server_config().server_name(), profile.name(), code);
+        String command = "/rpa_verify %s %s %s".formatted(config.values.server_config().server_name(), profile.getName(), code);
         Text link = Text.literal(command).styled((style) -> style.withFormatting(Formatting.BLUE));
 
         MutableText channel = Text.literal("Please use this command in ")
