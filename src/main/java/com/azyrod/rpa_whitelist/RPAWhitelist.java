@@ -172,6 +172,10 @@ public class RPAWhitelist implements DedicatedServerModInitializer {
     }
 
     private void onRefresh() {
+        if (this.gateway != null) {
+            return;
+        }
+
         synchronized (lock) {
             if (this.gateway != null) {
                 this.gateway.logout().block();
