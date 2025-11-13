@@ -42,14 +42,15 @@ tasks.shadowJar {
     relocate("com.discord4j", "com.azyrod.vendor.com.discord4j")
     relocate("nonapi.io.github.classgraph", "com.azyrod.vendor.nonapi.io.github.classgraph")
     relocate("io.github", "com.azyrod.vendor.io.github")
+    relocate("com.github", "com.azyrod.vendor.com.github")
 
     relocate("org.reactivestreams", "com.azyrod.vendor.org.reactivestreams")
     relocate("reactor", "com.azyrod.vendor.reactor")
     relocate("com.fasterxml", "com.azyrod.vendor.com.fasterxml")
+    relocate("org.yaml", "com.azyrod.vendor.org.yaml")
+
     relocate("io.projectreactor", "com.azyrod.vendor.io.projectreactor")
     relocate("io.netty", "com.azyrod.vendor.io.netty")
-
-    relocate("com.github", "com.azyrod.vendor.com.github")
 
     dependencies {
         include dependency("com.discord4j:.*:.*")
@@ -59,6 +60,7 @@ tasks.shadowJar {
         include dependency("io.projectreactor.*:.*:.*")
         include dependency("io.netty:.*:.*")
         include dependency("com.fasterxml.jackson.*:.*:.*")
+        include dependency("org.yaml:.*:.*")
 
         include dependency("com.github.ben-manes.caffeine:.*:.*")
     }
